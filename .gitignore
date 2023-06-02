@@ -1,8 +1,0 @@
-/доступы
-/gulp
-/wp/cross/*
-!/wp/cross/parser
-/.idea
-/backup
-.gitignore
-unnamed0.graphml
