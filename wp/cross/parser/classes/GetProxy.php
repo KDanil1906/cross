@@ -2,7 +2,7 @@
 
 namespace classes;
 
-require_once get_template_directory() . '/parser/Parser.php';
+//require_once get_template_directory() . '/parser/Parser.php';
 require_once get_template_directory() . '/parser/classes/Requests.php';
 
 use classes\Parser;
@@ -13,12 +13,6 @@ class GetProxy {
 	private $proxy_buff = array();
 	private $request;
 	private $url = 'https://free-proxy-list.net/';
-	private $counties = array(
-		'RU',
-		'KZ',
-		'BY',
-		'GE',
-	);
 
 	public function __construct() {
 		$this->request = new Requests();

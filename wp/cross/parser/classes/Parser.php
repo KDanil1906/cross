@@ -6,9 +6,19 @@
 //возможно повесить на метод реквест получени данных с каунтером, через таймаут.
 //То есть делать 100 запросов скажем в минуту
 
+//<!--НЕ НЕЗАБЫТЬ-->
+//<!---->
+//<!--ВКЛЮЧИТЬ ТАЙМИНГИ ЗАПРОСОВ-->
+//<!--ОТКЛЮЧИТЬ СДЕРЖИВАНИЕ ПАГИНАЦИИ-->
+//<!--ВКЛЮЧИТЬ ПРОВЕРКА В МЕТОДЕ product_fill_cycle()-->
+//<!--Убедиться что все сдерживающие факторы сняты -->
+
+// Использование:
+//$urls = array('https://lzpro.ru/category/otis/', 'https://lzpro.ru/category/zapchasti-dlya-eskalatorov-otis/', 'https://lzpro.ru/category/liftovye-lebedki-13vtr/');
 namespace classes;
 
-//require_once get_template_directory() . '/parser/classes/Requests.php';
+require_once get_template_directory() . '/parser/classes/Requests.php';
+require_once get_template_directory() . '/parser/classes/HandlingStatusParsedData.php';
 
 use classes\Requests;
 use DOMDocument;
@@ -27,7 +37,7 @@ class Parser {
 		$this->categories_urls = $urls;
 		$this->parse_result    = array();
 
-		$this->request = new Requests();
+		$this->request = new Requests( true );
 
 		if ( $urls ) {
 			$url          = $urls[0];
@@ -65,7 +75,6 @@ class Parser {
 	 * Получает ссылки товаров
 	 */
 	public function get_products_link() {
-
 //        Прохожу по основным категориям
 		foreach ( $this->parse_result as $general_cat => $child_category ) {
 			foreach ( $child_category as $category => $product ) {
@@ -123,7 +132,6 @@ class Parser {
 	 * Принимает ссылку на товар и получает данные со страницы товара
 	 */
 	public function get_product_data( $prod_link ) {
-//		$product_data = $this->request( $prod_link );
 		$product_data = $this->request->request( $prod_link, true );
 
 		$data = array(
@@ -266,16 +274,4 @@ class Parser {
 	public function getParseResult(): array {
 		return $this->parse_result;
 	}
-
 }
-
-// Использование:
-//$urls = array('https://lzpro.ru/category/otis/', 'https://lzpro.ru/category/zapchasti-dlya-eskalatorov-otis/', 'https://lzpro.ru/category/liftovye-lebedki-13vtr/');
-?>
-
-
-<!--НЕ НЕЗАБЫТЬ-->
-<!---->
-<!--ВКЛЮЧИТЬ ТАЙМИНГИ ЗАПРОСОВ-->
-<!--ОТКЛЮЧИТЬ СДЕРЖИВАНИЕ ПАГИНАЦИИ-->
-<!--ВКЛЮЧИТЬ ПРОВЕРКА В МЕТОДЕ product_fill_cycle()-->

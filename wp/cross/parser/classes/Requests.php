@@ -9,7 +9,25 @@ use classes\GetProxy;
 class Requests {
 
 	private $test_url = 'https://lzpro.ru/';
+	private $ip;
+	private $port;
+	private $proxy;
 
+
+	public function __construct( $proxy = false ) {
+
+		if ( $proxy ) {
+			$this->proxy = new GetProxy();
+			$this->findProxy();
+		}
+
+		debug(
+			array(
+				'start' => true,
+			)
+		);
+
+	}
 
 	/**
 	 * @param string $url
@@ -19,53 +37,82 @@ class Requests {
 	 * @return bool|string
 	 */
 	public function request( string $url, $pr_request = false ) {
-// инициализируем новый сеанс cURL
 		$ch = curl_init();
-// устанавливаем URL для запроса
 		curl_setopt( $ch, CURLOPT_URL, $url );
-// устанавливаем метод запроса (по умолчанию GET)
 		curl_setopt( $ch, CURLOPT_HTTPGET, true );
-// Генерирую рандомный user agent
 		$user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' . rand( 70, 90 ) . '.0.' . rand( 1000, 9999 ) . '.' . rand( 100, 999 ) . ' Safari/537.36';
 		curl_setopt( $ch, CURLOPT_USERAGENT, $user_agent );
-// устанавливаем параметр для сохранения ответа в переменной
 		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-// выполняем запрос и сохраняем ответ в переменную
 
+		# Если запрос с proxy
 		if ( $pr_request ) {
-			$proxy = new GetProxy();
-			$ip    = '';
-			$port  = '';
-
-			while ( true ) {
-				$pr_data = $proxy->getWorkingProxy();
-
-				if ( $pr_data ) {
-					$ip   = $pr_data['ip'];
-					$port = $pr_data['port'];
-					break;
-				}
-
-				sleep( 120 );
-			}
+			debug(
+				array(
+					'url'  => $url,
+					'ip'   => $this->ip,
+					'port' => $this->port,
+				)
+			);
 
 			curl_setopt( $ch, CURLOPT_PROXYTYPE, CURLPROXY_HTTP );
-			curl_setopt( $ch, CURLOPT_PROXY, $ip );
-			curl_setopt( $ch, CURLOPT_PROXYPORT, $port );
+			curl_setopt( $ch, CURLOPT_PROXY, $this->ip );
+			curl_setopt( $ch, CURLOPT_PROXYPORT, $this->port );
 		}
 
+		curl_setopt( $ch, CURLOPT_CONNECTTIMEOUT, 5 );
 
 		$response = curl_exec( $ch );
 
-// получаем статус запроса
 		$http_status = curl_getinfo( $ch, CURLINFO_HTTP_CODE );
 
-// закрываем сеанс cURL
+		# Если прокси не работает
+
+		if ( $http_status !== 200 ) {
+			$this->findProxy();
+			debug(
+				array(
+					'$http_status' => $http_status,
+					'new_ip'       => $this->ip,
+					'new_port'     => $this->port,
+				)
+			);
+
+			$response = $this->request( $url, true );
+		}
+
 		curl_close( $ch );
 
-		sleep( rand( 1, 3 ) );
-
+//		sleep( 1 );
 		return $response;
+	}
+
+	/**
+	 * @return void
+	 * Ищет рабочие прокси
+	 */
+	private function findProxy() {
+		debug(
+			array(
+				'while' => true,
+			)
+		);
+		while ( true ) {
+			$pr_data = $this->proxy->getWorkingProxy();
+
+			if ( $pr_data ) {
+				$this->ip   = $pr_data['ip'];
+				$this->port = $pr_data['port'];
+				break;
+			}
+
+			debug(
+				array(
+					'while-loop' => true,
+				)
+			);
+
+			sleep( 30 );
+		}
 	}
 
 	/**
