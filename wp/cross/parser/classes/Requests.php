@@ -4,6 +4,13 @@ namespace classes;
 
 require_once get_template_directory() . '/parser/classes/GetProxy.php';
 
+//напирается на ссылку в которой застяет в цикле
+//Получает IP проверяет его на ссылке доменной, она дает положительный результат и оставляет этот ip
+//Этот ip не подходит для обработки ссылки и снова попадает на логику в рекккурсии
+//Нужно передавть для проверки именну ту ссылку, на котороый спотыкается
+
+//Requests вызывает GetProxy а тот вызывает Requests и зациклились
+
 use classes\GetProxy;
 
 class Requests {
@@ -11,22 +18,19 @@ class Requests {
 	private $test_url = 'https://lzpro.ru/';
 	private $ip;
 	private $port;
-	private $proxy;
-
+	public static $counter = 0;
+	public static $producNum = 0;
+	public static $totalTime = 0;
 
 	public function __construct( $proxy = false ) {
+		debug( array( 'Requests' => 'NOPR', 'NUM' => self::$counter ) );
 
 		if ( $proxy ) {
-			$this->proxy = new GetProxy();
+			debug( array( 'Requests' => 'PD', 'NUM' => self::$counter ) );
 			$this->findProxy();
 		}
 
-		debug(
-			array(
-				'start' => true,
-			)
-		);
-
+		self::$counter ++;
 	}
 
 	/**
@@ -37,6 +41,10 @@ class Requests {
 	 * @return bool|string
 	 */
 	public function request( string $url, $pr_request = false ) {
+		$start = microtime( true );
+
+//		debug( array( 'request' => $pr_request, ) );
+
 		$ch = curl_init();
 		curl_setopt( $ch, CURLOPT_URL, $url );
 		curl_setopt( $ch, CURLOPT_HTTPGET, true );
@@ -46,20 +54,35 @@ class Requests {
 
 		# Если запрос с proxy
 		if ( $pr_request ) {
-			debug(
-				array(
-					'url'  => $url,
-					'ip'   => $this->ip,
-					'port' => $this->port,
-				)
-			);
+
+
+			self::$producNum ++;
+//			debug_counter(
+//				array( 'Links' => self::$producNum )
+//			);
+//
+//			debug(
+//				array(
+//					'url'  => $url,
+//					'ip'   => $this->ip,
+//					'port' => $this->port,
+//				)
+//			);
+//
+//			debug_clean(
+//				array(
+//					'url'  => $url,
+//					'ip'   => $this->ip,
+//					'port' => $this->port,
+//				)
+//			);
 
 			curl_setopt( $ch, CURLOPT_PROXYTYPE, CURLPROXY_HTTP );
 			curl_setopt( $ch, CURLOPT_PROXY, $this->ip );
 			curl_setopt( $ch, CURLOPT_PROXYPORT, $this->port );
 		}
 
-		curl_setopt( $ch, CURLOPT_CONNECTTIMEOUT, 5 );
+		curl_setopt( $ch, CURLOPT_CONNECTTIMEOUT, 3 );
 
 		$response = curl_exec( $ch );
 
@@ -67,22 +90,34 @@ class Requests {
 
 		# Если прокси не работает
 
-		if ( $http_status !== 200 ) {
+		if ( $pr_request && $http_status !== 200 ) {
+			$this->test_url = $url;
 			$this->findProxy();
-			debug(
-				array(
-					'$http_status' => $http_status,
-					'new_ip'       => $this->ip,
-					'new_port'     => $this->port,
-				)
-			);
+//			debug(
+//				array(
+//					'$http_status' => $http_status,
+//					'new_ip'       => $this->ip,
+//					'new_port'     => $this->port,
+//				)
+//			);
 
 			$response = $this->request( $url, true );
 		}
-
 		curl_close( $ch );
 
-//		sleep( 1 );
+		$end = microtime( true );
+
+		$executionTime   = $end - $start;
+		self::$totalTime += $executionTime;
+
+		debug_time(
+			array(
+				'Time'   => $executionTime,
+				'Medium' => self::$totalTime / self::$producNum,
+				'url'    => $url,
+			)
+		);
+
 		return $response;
 	}
 
@@ -91,56 +126,22 @@ class Requests {
 	 * Ищет рабочие прокси
 	 */
 	private function findProxy() {
-		debug(
-			array(
-				'while' => true,
-			)
-		);
+		debug( array( 'findProxy' => 'start', ) );
+
+		$proxy = new GetProxy( $this->test_url );
+
 		while ( true ) {
-			$pr_data = $this->proxy->getWorkingProxy();
+			debug( array( 'findProxy' => 'while', ) );
+
+			$pr_data = $proxy->getWorkingProxy();
 
 			if ( $pr_data ) {
 				$this->ip   = $pr_data['ip'];
 				$this->port = $pr_data['port'];
 				break;
 			}
-
-			debug(
-				array(
-					'while-loop' => true,
-				)
-			);
-
+			debug( array( 'findProxy' => 'loop', ) );
 			sleep( 30 );
 		}
 	}
-
-	/**
-	 * Получает id и port
-	 * Возвращает статус ответа
-	 */
-	public function checkProxy( $proxy_address, $proxy_port ) {
-		$ch = curl_init();
-		curl_setopt( $ch, CURLOPT_URL, $this->test_url );
-		curl_setopt( $ch, CURLOPT_HTTPGET, true );
-		$user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' . rand( 70, 90 ) . '.0.' . rand( 1000, 9999 ) . '.' . rand( 100, 999 ) . ' Safari/537.36';
-		curl_setopt( $ch, CURLOPT_USERAGENT, $user_agent );
-		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-
-		curl_setopt( $ch, CURLOPT_PROXYTYPE, CURLPROXY_HTTP );
-		curl_setopt( $ch, CURLOPT_PROXY, $proxy_address );
-		curl_setopt( $ch, CURLOPT_PROXYPORT, $proxy_port );
-		curl_setopt( $ch, CURLOPT_CONNECTTIMEOUT, 5 ); // Устанавливаем время ожидания в 5 секунд
-
-		$response = curl_exec( $ch );
-		curl_close( $ch );
-
-		if ( $response === false ) {
-			return false;
-		} else {
-			return curl_getinfo( $ch, CURLINFO_HTTP_CODE );
-		}
-	}
-
-
 }

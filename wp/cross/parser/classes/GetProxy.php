@@ -4,6 +4,7 @@ namespace classes;
 
 //require_once get_template_directory() . '/parser/Parser.php';
 require_once get_template_directory() . '/parser/classes/Requests.php';
+require_once get_template_directory() . '/parser/classes/Parser.php';
 
 use classes\Parser;
 use classes\Requests;
@@ -12,10 +13,15 @@ class GetProxy {
 
 	private $proxy_buff = array();
 	private $request;
+	private $test_url;
 	private $url = 'https://free-proxy-list.net/';
+	public static $counter = 0;
 
-	public function __construct() {
-		$this->request = new Requests();
+	public function __construct( $test_url ) {
+		debug( array( 'GetProxy' => 'start', 'NUM' => self::$counter ) );
+		self::$counter ++;
+
+		$this->test_url = $test_url;
 		$this->checkProxyFromDB();
 	}
 
@@ -25,12 +31,13 @@ class GetProxy {
 	 * Получает и записывает в переменную доступные proxy с ресурса в $url
 	 */
 	private function getProxyList() {
-		$parser = new Parser();
-		$page   = $this->request->request( $this->url );
+		debug( array( 'getProxyList' => 'start', ) );
+		$this->request = new Requests();
+		$page          = $this->request->request( $this->url );
 
 		$query = "//table[contains(@class, 'table') and contains(@class, 'table-striped') and contains(@class, 'table-bordered')]/tbody/tr";
 
-		$html_selected = $parser->query_get_elems_from_html( $page, $query );
+		$html_selected = Parser::query_get_elems_from_html( $page, $query );
 
 		foreach ( $html_selected as $tr ) {
 			$td_elements = $tr->getElementsByTagName( 'td' );
@@ -45,13 +52,10 @@ class GetProxy {
 				array_push( $data_buff, $text );
 			}
 
-//			if ( in_array( $data_buff[2], $this->counties ) ) {
 			$this->proxy_buff[] = array(
-				'ip'      => $data_buff[0],
-				'port'    => $data_buff[1],
-				'country' => $data_buff[2],
+				'ip'   => $data_buff[0],
+				'port' => $data_buff[1],
 			);
-//			}
 
 			$data_buff = array();
 		}
@@ -65,13 +69,24 @@ class GetProxy {
 	 * Проходит по временному массиву полученных Proxy м забирает рабочие
 	 */
 	public function checkProxyList() {
+		debug( array( 'checkProxyList' => 'start', ) );
+
 		if ( $this->proxy_buff ) {
 			foreach ( $this->proxy_buff as $proxy ) {
-				$status = $this->request->checkProxy( $proxy['ip'], $proxy['port'] );
+//Тут была проверка перед записью
+//				Она снята для оптимизации скорости процессов
+//				$status = $this->checkProxy( $proxy['ip'], $proxy['port'], $this->test_url );
 
-				if ( $status === 200 ) {
-					$this->writeProxyToDB( $proxy['ip'], $proxy['port'] );
-				}
+				debug( array(
+					'checkProxyList' => array(
+						'check' => true,
+						'ip'    => $proxy['ip'],
+					),
+				) );
+
+//				if ( $status === 200 ) {
+				$this->writeProxyToDB( $proxy['ip'], $proxy['port'] );
+//				}
 			}
 		}
 	}
@@ -81,6 +96,8 @@ class GetProxy {
 	 * Получает Proxy записанные в базу данных
 	 */
 	public function getProxyFromDB() {
+		debug( array( 'getProxyFromDB' => 'start', ) );
+
 		global $wpdb;
 
 		$table_name = $wpdb->prefix . 'cross_proxi'; // Замените 'имя_таблицы' на фактическое имя таблицы в WordPress
@@ -99,6 +116,8 @@ class GetProxy {
 	 * Записывает proxy в базу данных
 	 */
 	public function writeProxyToDB( $proxy_address, $proxy_port ) {
+		debug( array( 'writeProxyToDB' => 'start', ) );
+
 		global $wpdb;
 
 		$table_name = $wpdb->prefix . 'cross_proxi'; // Получаем имя таблицы wp_posts
@@ -120,6 +139,8 @@ class GetProxy {
 	}
 
 	public function getProxyData( $ip, $port ) {
+		debug( array( 'getProxyData' => 'start', ) );
+
 		global $wpdb;
 
 		$table_name = $wpdb->prefix . 'cross_proxi'; // Получаем имя таблицы wp_posts
@@ -140,6 +161,8 @@ class GetProxy {
 	 * Удаляет proxy из базы данных по ID
 	 */
 	private function deleteProxyFromDB( $id ) {
+		debug( array( 'deleteProxyFromDB' => 'start', ) );
+
 		global $wpdb;
 
 		$table_name = $wpdb->prefix . 'cross_proxi'; // Получаем имя таблицы wp_posts
@@ -158,6 +181,8 @@ class GetProxy {
 	 * Проверяет сохраненные в базу данных proxy
 	 */
 	public function checkProxyFromDB() {
+		debug( array( 'checkProxyFromDB' => 'start', ) );
+
 		$proxy = $this->getProxyFromDB();
 
 		if ( $proxy ) {
@@ -166,16 +191,21 @@ class GetProxy {
 				$proxi_id = $row->proxi_id;
 				$port     = $row->port;
 
-				$status = $this->request->checkProxy( $proxi_id, $port );
+				$this->checkProxy( $proxi_id, $port, $this->test_url, $id );
 
-				if ( $status !== 200 ) {
-					$this->deleteProxyFromDB( $id );
-				}
 			}
+		} else {
+			$this->getProxyList();
 		}
 	}
 
-	public function getWorkingProxy() {
+	public function getWorkingProxy( $url = null ) {
+		debug( array( 'getWorkingProxy' => 'start', ) );
+
+		if ( $url ) {
+			$this->test_url = $url;
+		}
+
 		$proxy = $this->getProxyFromDB();
 		if ( ! $proxy ) {
 			$this->getProxyList();
@@ -187,10 +217,12 @@ class GetProxy {
 		}
 
 		foreach ( $proxy as $row ) {
+			debug( array( 'getWorkingProxy' => 'return', ) );
 			$proxi_id = $row->proxi_id;
 			$port     = $row->port;
+			$id       = $row->id;
 
-			$status = $this->request->checkProxy( $proxi_id, $port );
+			$status = $this->checkProxy( $proxi_id, $port, $this->test_url, $id );
 
 			if ( $status === 200 ) {
 				return array(
@@ -199,6 +231,40 @@ class GetProxy {
 				);
 			}
 		}
+	}
+
+	/**
+	 * Получает id и port
+	 * Возвращает статус ответа
+	 */
+	public function checkProxy( $proxy_address, $proxy_port, $url, $id = null ) {
+		debug( array( 'checkProxy' => 'start', ) );
+
+		$ch = curl_init();
+		curl_setopt( $ch, CURLOPT_URL, $url );
+		curl_setopt( $ch, CURLOPT_HTTPGET, true );
+		$user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' . rand( 70, 90 ) . '.0.' . rand( 1000, 9999 ) . '.' . rand( 100, 999 ) . ' Safari/537.36';
+		curl_setopt( $ch, CURLOPT_USERAGENT, $user_agent );
+		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+
+		curl_setopt( $ch, CURLOPT_PROXYTYPE, CURLPROXY_HTTP );
+		curl_setopt( $ch, CURLOPT_PROXY, $proxy_address );
+		curl_setopt( $ch, CURLOPT_PROXYPORT, $proxy_port );
+		curl_setopt( $ch, CURLOPT_CONNECTTIMEOUT, 3 ); // Устанавливаем время ожидания в 5 секунд
+
+		$response = curl_exec( $ch );
+		curl_close( $ch );
+
+		if ( $response === false ) {
+			if ( $id ) {
+				$this->deleteProxyFromDB( $id );
+			}
+
+			return false;
+		}
+
+		return curl_getinfo( $ch, CURLINFO_HTTP_CODE );
+
 	}
 
 	public function startProxy() {

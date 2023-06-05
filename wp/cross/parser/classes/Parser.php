@@ -34,6 +34,8 @@ class Parser {
 
 
 	public function __construct( array $urls = array() ) {
+		debug( array( 'Parser' => 'start', ) );
+
 		$this->categories_urls = $urls;
 		$this->parse_result    = array();
 
@@ -90,9 +92,11 @@ class Parser {
 					$query         = "//a[contains(@class, 'Product__Link--Slider')]";
 					$product_links = $this->query_get_elems_from_html( $page, $query );
 
+
 					foreach ( $product_links as $link ) {
-//                        $this->parse_result[$category_link][$this->domain . $category->getAttribute('href')] = array();
-						$this->parse_result[ $general_cat ][ $category ][ $this->domain . $link->getAttribute( 'href' ) ] = array();
+						$linkHref = $link->getAttribute('href');
+						$linkHref = str_replace(' ', '%20', $linkHref);
+						$this->parse_result[$general_cat][$category][$this->domain . $linkHref] = array();
 					}
 
 					break;
@@ -146,7 +150,7 @@ class Parser {
 		$product_result = array();
 
 		foreach ( $data as $data_name => $data_query ) {
-			$elems = $this->query_get_elems_from_html( $product_data, $data_query );
+			$elems = self::query_get_elems_from_html( $product_data, $data_query );
 
 			if ( ! $elems ) {
 				continue;
@@ -226,7 +230,7 @@ class Parser {
 			}
 
 			$query          = "//a[contains(@class, '" . $linkClass . "')]";
-			$category_links = $this->query_get_elems_from_html( $page_html, $query );
+			$category_links = self::query_get_elems_from_html( $page_html, $query );
 
 			if ( $category_links->length == 0 ) {
 				continue;
@@ -246,13 +250,17 @@ class Parser {
 	 *
 	 * Метод получения элементов из html по query
 	 */
-	public function query_get_elems_from_html( $page_html, $query ) {
-		$dom = new DOMDocument();
-		libxml_use_internal_errors( true );
-		$dom->loadHTML( $page_html );
-		$xpath = new DOMXPath( $dom );
+	public static function query_get_elems_from_html( $page_html, $query ) {
+		if ( $page_html ) {
+			$dom = new DOMDocument();
+			libxml_use_internal_errors( true );
+			$dom->loadHTML( $page_html );
+			$xpath = new DOMXPath( $dom );
 
-		return $xpath->query( $query );
+			return $xpath->query( $query );
+		}
+
+		return false;
 	}
 
 	/**
