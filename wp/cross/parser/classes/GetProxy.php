@@ -15,12 +15,8 @@ class GetProxy {
 	private $request;
 	private $test_url;
 	private $url = 'https://free-proxy-list.net/';
-	public static $counter = 0;
 
 	public function __construct( $test_url ) {
-		debug( array( 'GetProxy' => 'start', 'NUM' => self::$counter ) );
-		self::$counter ++;
-
 		$this->test_url = $test_url;
 		$this->checkProxyFromDB();
 	}
@@ -31,7 +27,6 @@ class GetProxy {
 	 * Получает и записывает в переменную доступные proxy с ресурса в $url
 	 */
 	private function getProxyList() {
-		debug( array( 'getProxyList' => 'start', ) );
 		$this->request = new Requests();
 		$page          = $this->request->request( $this->url );
 
@@ -69,24 +64,9 @@ class GetProxy {
 	 * Проходит по временному массиву полученных Proxy м забирает рабочие
 	 */
 	public function checkProxyList() {
-		debug( array( 'checkProxyList' => 'start', ) );
-
 		if ( $this->proxy_buff ) {
 			foreach ( $this->proxy_buff as $proxy ) {
-//Тут была проверка перед записью
-//				Она снята для оптимизации скорости процессов
-//				$status = $this->checkProxy( $proxy['ip'], $proxy['port'], $this->test_url );
-
-				debug( array(
-					'checkProxyList' => array(
-						'check' => true,
-						'ip'    => $proxy['ip'],
-					),
-				) );
-
-//				if ( $status === 200 ) {
 				$this->writeProxyToDB( $proxy['ip'], $proxy['port'] );
-//				}
 			}
 		}
 	}
@@ -96,8 +76,6 @@ class GetProxy {
 	 * Получает Proxy записанные в базу данных
 	 */
 	public function getProxyFromDB() {
-		debug( array( 'getProxyFromDB' => 'start', ) );
-
 		global $wpdb;
 
 		$table_name = $wpdb->prefix . 'cross_proxi'; // Замените 'имя_таблицы' на фактическое имя таблицы в WordPress
@@ -116,8 +94,6 @@ class GetProxy {
 	 * Записывает proxy в базу данных
 	 */
 	public function writeProxyToDB( $proxy_address, $proxy_port ) {
-		debug( array( 'writeProxyToDB' => 'start', ) );
-
 		global $wpdb;
 
 		$table_name = $wpdb->prefix . 'cross_proxi'; // Получаем имя таблицы wp_posts
@@ -139,8 +115,6 @@ class GetProxy {
 	}
 
 	public function getProxyData( $ip, $port ) {
-		debug( array( 'getProxyData' => 'start', ) );
-
 		global $wpdb;
 
 		$table_name = $wpdb->prefix . 'cross_proxi'; // Получаем имя таблицы wp_posts
@@ -161,7 +135,6 @@ class GetProxy {
 	 * Удаляет proxy из базы данных по ID
 	 */
 	private function deleteProxyFromDB( $id ) {
-		debug( array( 'deleteProxyFromDB' => 'start', ) );
 
 		global $wpdb;
 
@@ -181,8 +154,6 @@ class GetProxy {
 	 * Проверяет сохраненные в базу данных proxy
 	 */
 	public function checkProxyFromDB() {
-		debug( array( 'checkProxyFromDB' => 'start', ) );
-
 		$proxy = $this->getProxyFromDB();
 
 		if ( $proxy ) {
@@ -200,7 +171,6 @@ class GetProxy {
 	}
 
 	public function getWorkingProxy( $url = null ) {
-		debug( array( 'getWorkingProxy' => 'start', ) );
 
 		if ( $url ) {
 			$this->test_url = $url;
@@ -217,7 +187,6 @@ class GetProxy {
 		}
 
 		foreach ( $proxy as $row ) {
-			debug( array( 'getWorkingProxy' => 'return', ) );
 			$proxi_id = $row->proxi_id;
 			$port     = $row->port;
 			$id       = $row->id;
@@ -238,7 +207,6 @@ class GetProxy {
 	 * Возвращает статус ответа
 	 */
 	public function checkProxy( $proxy_address, $proxy_port, $url, $id = null ) {
-		debug( array( 'checkProxy' => 'start', ) );
 
 		$ch = curl_init();
 		curl_setopt( $ch, CURLOPT_URL, $url );

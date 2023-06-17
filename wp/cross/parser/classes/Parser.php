@@ -1,20 +1,14 @@
 <?php
-//Реализовать отдельный метод добавления отдельного товара в случае если во время общего парсинга найдено новый товар (или по ссылке или по названию а возможно и по SKU)
 
-
-//Реализовать метод который будет сливать временные данные класса с файлов
 //возможно повесить на метод реквест получени данных с каунтером, через таймаут.
 //То есть делать 100 запросов скажем в минуту
 
 //<!--НЕ НЕЗАБЫТЬ-->
 //<!---->
-//<!--ВКЛЮЧИТЬ ТАЙМИНГИ ЗАПРОСОВ-->
 //<!--ОТКЛЮЧИТЬ СДЕРЖИВАНИЕ ПАГИНАЦИИ-->
 //<!--ВКЛЮЧИТЬ ПРОВЕРКА В МЕТОДЕ product_fill_cycle()-->
 //<!--Убедиться что все сдерживающие факторы сняты -->
 
-// Использование:
-//$urls = array('https://lzpro.ru/category/otis/', 'https://lzpro.ru/category/zapchasti-dlya-eskalatorov-otis/', 'https://lzpro.ru/category/liftovye-lebedki-13vtr/');
 namespace classes;
 
 require_once get_template_directory() . '/parser/classes/Requests.php';
@@ -34,8 +28,6 @@ class Parser {
 
 
 	public function __construct( array $urls = array() ) {
-		debug( array( 'Parser' => 'start', ) );
-
 		$this->categories_urls = $urls;
 		$this->parse_result    = array();
 
@@ -72,6 +64,12 @@ class Parser {
 		file_put_contents( $file_name, $json );
 	}
 
+	private function writeInterimResult( $file ) {
+		$json      = json_encode( $file );
+		$file_name = get_template_directory() . '/parser/' . 'interim-data.json';
+		file_put_contents( $file_name, $json );
+	}
+
 	/**
 	 * @return void
 	 * Получает ссылки товаров
@@ -94,12 +92,14 @@ class Parser {
 
 
 					foreach ( $product_links as $link ) {
-						$linkHref = $link->getAttribute('href');
-						$linkHref = str_replace(' ', '%20', $linkHref);
-						$this->parse_result[$general_cat][$category][$this->domain . $linkHref] = array();
+						$linkHref                                                                     = $link->getAttribute( 'href' );
+						$linkHref                                                                     = str_replace( ' ', '%20', $linkHref );
+						$this->parse_result[ $general_cat ][ $category ][ $this->domain . $linkHref ] = array();
 					}
 
+//					Искуственное сдерживание
 					break;
+
 					$page_num ++;
 				}
 			}
@@ -123,6 +123,7 @@ class Parser {
 
 					$product_data                                                     = $this->get_product_data( $pr_link );
 					$this->parse_result[ $category_key ][ $nest_cat_key ][ $pr_link ] = $product_data;
+
 				}
 			}
 		}
@@ -236,7 +237,11 @@ class Parser {
 				continue;
 			}
 
+//			Получил подкатегории и можно применять сразу же проход по товарам
 			foreach ( $category_links as $category ) {
+//				Метод обработки ссылки подкатегории для получения всех товаров которые в ней лежат
+
+
 				$callback( $category_link, $category );
 			}
 		}
