@@ -3,73 +3,59 @@
 namespace classes;
 
 class HandlingStatusParsedData {
-	private $products_data;
-	private $product_list;
+	private string $file;
 
 
-	public function __construct() {
-		$file_name           = get_template_directory() . '/parser/' . 'data.json';
-		$this->products_data = json_decode( $this->get_the_data_from_json( $file_name ), true );
-		$this->product_list  = $this->get_clear_products( $this->products_data );
-	}
-
-	public function set_product_status_posted( $status, $product_link ) {
-//        получить и изменить json данные
+	public function __construct( string $file ) {
+		$this->file = $file;
 	}
 
 	/**
-	 * @param $product_link
+	 * @param $link
+	 * Проверяет наличие товара в массиве
 	 *
 	 * @return bool
-	 * Проверяю существует ли товар в базе
 	 */
-	public function check_product_in_file( $product_link ) {
-		return array_key_exists( $this->product_list, $product_link );
-	}
-
-	/**
-	 * @return array
-	 * Преобразует массив товаров к удобному для обработки виду
-	 */
-	public function get_clear_products( $product_data ) {
-		$product_list = array();
-
-		if ( $product_data ) {
-			foreach ( $product_data as $category ) {
-				foreach ( $category as $nested_category ) {
-					foreach ( $nested_category as $key => $products ) {
-						$product_list[ $key ] = $products;
-					}
-				}
+	public function checkProductInData( $link ): bool {
+		$products = $this->getArrayFromJson( $this->file );
+		if ( $products ) {
+			if ( key_exists( $link, $products ) ) {
+				return true;
 			}
 		}
 
-
-		return $product_list;
+		return false;
 	}
 
 	/**
-	 * @param $filename
+	 * @param $link
+	 * Возвращает статус товара в массиве
 	 *
-	 * @return false|string
-	 * Возвращает данные
+	 * @return false|mixed
 	 */
-	public function get_the_data_from_json( $filename ) {
-		return file_get_contents( $filename );
+	public function getProductStatus( $link ) {
+		$products = $this->getArrayFromJson( $this->file );
+		if ( $products ) {
+			if ( key_exists( $link, $products ) ) {
+				return $products[ $link ]['status'];
+			}
+		}
+
+		return false;
 	}
 
 	/**
+	 * @param $file_name
+	 *
 	 * @return mixed
+	 * Возвращает ассоциативный массив из json
 	 */
-	public function getProductList() {
-		return $this->product_list;
-	}
+	public function getArrayFromJson( $file_name ) {
+		if ( file_exists( $file_name ) ) {
+			return json_decode( file_get_contents( $file_name ), true );
+		}
 
-	/**
-	 * @return mixed
-	 */
-	public function getProductsData() {
-		return $this->products_data;
+		return null;
 	}
 
 }

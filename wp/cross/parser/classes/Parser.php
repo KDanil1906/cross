@@ -9,6 +9,7 @@
 //<!--ВКЛЮЧИТЬ ПРОВЕРКА В МЕТОДЕ product_fill_cycle()-->
 //<!--Убедиться что все сдерживающие факторы сняты -->
 
+
 namespace classes;
 
 require_once get_template_directory() . '/parser/classes/Requests.php';
@@ -20,18 +21,48 @@ use DOMXPath;
 use classes\HandlingStatusParsedData;
 
 class Parser {
+	/**
+	 * @var array
+	 * Start category array
+	 */
 	private $categories_urls;
-	private $parse_result;
+
+	/**
+	 * @var string
+	 * Parsing target domain
+	 */
 	private $domain;
 
+	/**
+	 * @var array
+	 * Temporary product link buffer
+	 */
+	private $prod_buff;
+
+	/**
+	 * @var \classes\Requests
+	 */
 	private $request;
+
+	/**
+	 * @var string
+	 * Json file of goods
+	 */
+	private $prod_file;
+
+	/**
+	 * @var \classes\HandlingStatusParsedData
+	 */
+	private $handling_pr;
 
 
 	public function __construct( array $urls = array() ) {
 		$this->categories_urls = $urls;
-		$this->parse_result    = array();
 
 		$this->request = new Requests( true );
+
+		$this->prod_file   = get_template_directory() . '/parser/' . 'products1.json';
+		$this->handling_pr = new HandlingStatusParsedData( $this->prod_file );
 
 		if ( $urls ) {
 			$url          = $urls[0];
@@ -47,85 +78,73 @@ class Parser {
 	 */
 	public function get_category_links() {
 //   Получаю все вложенные категории переданные через настройки страницы парсинга
-		$this->get_dom_links( $this->categories_urls, 'Category__Item--All', function ( $category_link, $category ) {
-			$this->parse_result[ $category_link ][ $this->domain . $category->getAttribute( 'href' ) ] = array();
-		} );
+		$this->get_dom_links( $this->categories_urls, 'Category__Item--All' );
 	}
 
 	/**
-	 * @param $file
+	 * @return mixed
+	 * Получает товары из JSON и преобразует в массив
+	 */
+	public function getProductFromJson() {
+		$file_name = $this->prod_file;
+		if ( file_exists( $file_name ) ) {
+			return json_decode( file_get_contents( $file_name ), true );
+		}
+
+		return null;
+	}
+
+
+	/**
+	 * @param $data
+	 * Переписывает массив с товарами
 	 *
 	 * @return void
-	 * Запись результатов
 	 */
-	private function writeToJson( $file ) {
-		$json      = json_encode( $file );
-		$file_name = get_template_directory() . '/parser/' . 'data.json';
-		file_put_contents( $file_name, $json );
-	}
-
-	private function writeInterimResult( $file ) {
-		$json      = json_encode( $file );
-		$file_name = get_template_directory() . '/parser/' . 'interim-data.json';
-		file_put_contents( $file_name, $json );
-	}
-
-	/**
-	 * @return void
-	 * Получает ссылки товаров
-	 */
-	public function get_products_link() {
-//        Прохожу по основным категориям
-		foreach ( $this->parse_result as $general_cat => $child_category ) {
-			foreach ( $child_category as $category => $product ) {
-
-				$page_num = 1;
-				while ( true ) {
-					$page = $this->get_paginate_link_html( $page_num, $category );
-
-					if ( ! $page ) {
-						break;
-					}
-
-					$query         = "//a[contains(@class, 'Product__Link--Slider')]";
-					$product_links = $this->query_get_elems_from_html( $page, $query );
+	public function addProdDataToJson( $data ) {
+		$file_name    = $this->prod_file;
+		$product_data = array();
 
 
-					foreach ( $product_links as $link ) {
-						$linkHref                                                                     = $link->getAttribute( 'href' );
-						$linkHref                                                                     = str_replace( ' ', '%20', $linkHref );
-						$this->parse_result[ $general_cat ][ $category ][ $this->domain . $linkHref ] = array();
-					}
+		$file_data = $this->getProductFromJson();
+		if ( $file_data ) {
+			$product_data = $file_data;
+		}
 
-//					Искуственное сдерживание
-					break;
-
-					$page_num ++;
-				}
+		if ( $data ) {
+			foreach ( $data as $prod_link => $prod_data ) {
+				$product_data[ $prod_link ] = $prod_data;
 			}
 		}
+
+		file_put_contents( $file_name, json_encode( $product_data ) );
 	}
+
 
 	/**
 	 * @return void
-	 * Метод проходит по собранным ссылкам - сравнивает с базой имеющихся товаров, если товара нет - вызывает метод
-	 * и получает данные товара.
+	 * Проходит по собранным ссылкам товара и парсин данные товара (цена, название и тд)
 	 */
-	private function product_fill_cycle() {
-		$product_db      = new HandlingStatusParsedData();
-		$product_list_db = $product_db->getProductList();
+	public function parseProductData() {
+		$product = $this->getProductFromJson();
 
-		foreach ( $this->parse_result as $category_key => $category_value ) {
-			foreach ( $category_value as $nest_cat_key => $nest_cat_value ) {
-				foreach ( $nest_cat_value as $pr_link => $pr_data ) {
+		if ( ! $product ) {
+			exit();
+		}
 
-//                    if (array_key_exists($pr_link, $product_list_db)) continue;
-
-					$product_data                                                     = $this->get_product_data( $pr_link );
-					$this->parse_result[ $category_key ][ $nest_cat_key ][ $pr_link ] = $product_data;
-
-				}
+		foreach ( $product as $prod_link => $prod_data ) {
+			if ( $this->handling_pr->getProductStatus( $prod_link ) !== 'add-link' ) {
+				continue;
 			}
+
+			$product_data = $this->get_product_data( $prod_link );
+			$new_data     = $prod_data;
+
+			foreach ( $product_data as $data_key => $data_val ) {
+				$new_data[ $data_key ] = $data_val;
+			}
+
+			$this->addProdDataToJson( array( $prod_link => $new_data ) );
 		}
 	}
 
@@ -191,7 +210,7 @@ class Parser {
 			}
 		}
 
-		$product_result['status'] = 'added';
+		$product_result['status'] = 'fill';
 
 		return $product_result;
 	}
@@ -214,14 +233,12 @@ class Parser {
 	/**
 	 * @param array $links
 	 * @param string $linkClass
-	 * @param callable $callback
 	 *
-	 * @return false
+	 * @return void
+	 * Получает массив ссылок категорий, извлекает подкатегории, вызывает метод получения ссылок товаров подкатегорий.
 	 *
-	 * Получает массив ссылок
-	 * Используется для получения ссылок подкатегорий и получения ссылок товаров
 	 */
-	public function get_dom_links( array $links, string $linkClass, callable $callback ) {
+	public function get_dom_links( array $links, string $linkClass ) {
 		foreach ( $links as $key => $category_link ) {
 			$url       = $category_link;
 			$page_html = $this->request->request( $url, true );
@@ -230,22 +247,94 @@ class Parser {
 				continue;
 			}
 
+			$cat_name = $this->getCatName( $page_html );
+			$this->log( "Start MAIN category $cat_name" );
+
 			$query          = "//a[contains(@class, '" . $linkClass . "')]";
 			$category_links = self::query_get_elems_from_html( $page_html, $query );
 
-			if ( $category_links->length == 0 ) {
+
+			if ( $category_links->length === 0 ) {
 				continue;
 			}
 
-//			Получил подкатегории и можно применять сразу же проход по товарам
 			foreach ( $category_links as $category ) {
-//				Метод обработки ссылки подкатегории для получения всех товаров которые в ней лежат
-
-
-				$callback( $category_link, $category );
+				$nes_cat_link = $this->domain . $category->getAttribute( 'href' );
+				$this->get_and_save_pr_link( $nes_cat_link, $cat_name );
 			}
+
+			$this->log( "End MAIN category $cat_name" );
 		}
 	}
+
+	/**
+	 * @param $page_html
+	 * Возвращает название категории страницы
+	 *
+	 * @return mixed
+	 */
+	private function getCatName( $page_html ) {
+		$query = "//h1/text()";
+		$title = self::query_get_elems_from_html( $page_html, $query )->item( 0 )->nodeValue;
+		$title = trim( $title );
+		$title = str_replace( 'в  Москве', '', $title );
+
+		return trim( $title );
+	}
+
+	/**
+	 * @param $cat_link
+	 * @param $main_cat_name
+	 *
+	 * @return void
+	 * Получает ссылки товаров.
+	 *
+	 */
+	public function get_and_save_pr_link( $cat_link, $main_cat_name ) {
+//		Получаю ссылку категории товаров
+		$page_html    = $this->request->request( $cat_link, true );
+		$nes_cat_name = $this->getCatName( $page_html );
+
+		$this->log( "Start NES category $nes_cat_name" );
+
+		$page_num = 1;
+		while ( true ) {
+			$page = $this->get_paginate_link_html( $page_num, $cat_link );
+
+			if ( ! $page ) {
+				break;
+			}
+
+			$query         = "//a[contains(@class, 'Product__Link--Slider')]";
+			$product_links = $this->query_get_elems_from_html( $page, $query );
+
+			foreach ( $product_links as $link ) {
+//				запись в буффер
+				$linkHref = $link->getAttribute( 'href' );
+				$linkHref = str_replace( ' ', '%20', $linkHref );
+				$linkHref = $this->domain . $linkHref;
+
+				if ( ! $this->handling_pr->checkProductInData( $linkHref ) ) {
+					$this->prod_buff[ $linkHref ] = array(
+						'main_cat' => $main_cat_name,
+						'nes_cat'  => $nes_cat_name,
+						'status'   => 'add-link'
+					);
+				}
+			}
+
+//					Искуственное сдерживание
+			break;
+
+			$page_num ++;
+		}
+
+		$this->log( "End NES category $nes_cat_name" );
+
+		$this->addProdDataToJson( $this->prod_buff );
+		$this->prod_buff = array();
+	}
+
 
 	/**
 	 * @param $page_html
@@ -257,15 +346,22 @@ class Parser {
 	 */
 	public static function query_get_elems_from_html( $page_html, $query ) {
 		if ( $page_html ) {
+
 			$dom = new DOMDocument();
 			libxml_use_internal_errors( true );
 			$dom->loadHTML( $page_html );
-			$xpath = new DOMXPath( $dom );
+			$xpath  = new DOMXPath( $dom );
+			$result = $xpath->query( $query );
 
-			return $xpath->query( $query );
+			return $result;
 		}
 
 		return false;
+	}
+
+	private function log( $data ) {
+		$file_path = get_template_directory() . '/parser/log.json';
+		file_put_contents( $file_path, json_encode( $data, JSON_UNESCAPED_UNICODE ) . PHP_EOL, FILE_APPEND );
 	}
 
 	/**
@@ -274,17 +370,6 @@ class Parser {
 	 */
 	public function parse() {
 		$this->get_category_links();
-		$this->get_products_link();
-		$this->product_fill_cycle();
-
-		$this->writeToJson( $this->parse_result );
-	}
-
-	/**
-	 * @return array
-	 * getter getParseResult;
-	 */
-	public function getParseResult(): array {
-		return $this->parse_result;
+		$this->parseProductData();
 	}
 }

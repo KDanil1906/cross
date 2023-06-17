@@ -79,7 +79,7 @@ class Requests {
 				$this->port = $pr_data['port'];
 				break;
 			}
-			sleep( 30 );
+			sleep( 5 );
 		}
 	}
 }
