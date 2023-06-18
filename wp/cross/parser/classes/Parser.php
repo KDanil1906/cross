@@ -150,7 +150,7 @@ class Parser {
 		$desk   = isset( $data['desk'] ) ? $data['desk'] : null;
 		$price  = isset( $data['price'] ) ? $data['price'] : null;
 		$name   = isset( $data['name'] ) ? $data['name'] : null;
-		$attrs  = isset( $data['attrs'] ) ? json_encode( $data['attrs'] ) : null;
+		$attrs = isset( $data['attrs'] ) ? json_encode( $data['attrs'] ) : 'null';
 
 		$query = $wpdb->prepare(
 			"UPDATE $table_name SET 
