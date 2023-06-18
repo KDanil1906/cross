@@ -15,7 +15,6 @@ require_once get_template_directory() . '/parser/classes/HandlingStatusParsedDat
 use classes\Requests;
 use DOMDocument;
 use DOMXPath;
-use classes\HandlingStatusParsedData;
 
 class Parser {
 	/**
@@ -43,23 +42,20 @@ class Parser {
 
 	/**
 	 * @var string
-	 * Json file of goods
+	 * Название таблицы товаров
 	 */
-	private $prod_file;
-
-	/**
-	 * @var \classes\HandlingStatusParsedData
-	 */
-	private $handling_pr;
+	private $table_name;
 
 
 	public function __construct( array $urls = array() ) {
+		global $wpdb;
+		$this->table_name = $wpdb->prefix . 'parse_products';
+
+
 		$this->categories_urls = $urls;
 
 		$this->request = new Requests( true );
 
-		$this->prod_file   = get_template_directory() . '/parser/' . 'products.json';
-		$this->handling_pr = new HandlingStatusParsedData( $this->prod_file );
 
 		if ( $urls ) {
 			$url          = $urls[0];
@@ -82,10 +78,24 @@ class Parser {
 	 * @return mixed
 	 * Получает товары из JSON и преобразует в массив
 	 */
-	public function getProductFromJson() {
-		$file_name = $this->prod_file;
-		if ( file_exists( $file_name ) ) {
-			return json_decode( file_get_contents( $file_name ), true );
+	public function getProductFromDB( $status = null ) {
+		global $wpdb;
+
+		$table_name = $this->table_name;
+
+		if ( $status ) {
+			$query = $wpdb->prepare(
+				"SELECT * FROM $table_name WHERE status = %s",
+				$status
+			);
+		} else {
+			$query = "SELECT * FROM $table_name";
+		}
+
+		$results = $wpdb->get_results( $query, 'ARRAY_A' );
+
+		if ( $results ) {
+			return $results;
 		}
 
 		return null;
@@ -94,27 +104,75 @@ class Parser {
 
 	/**
 	 * @param $data
-	 * Переписывает массив с товарами
+	 * Добавляет ссылки на товары в базу данных
 	 *
 	 * @return void
 	 */
-	public function addProdDataToJson( $data ) {
-		$file_name    = $this->prod_file;
-		$product_data = array();
-
-
-		$file_data = $this->getProductFromJson();
-		if ( $file_data ) {
-			$product_data = $file_data;
-		}
-
+	public function addProdDataToDB( $data ) {
 		if ( $data ) {
+			global $wpdb;
+			$table_name = $this->table_name;
+
 			foreach ( $data as $prod_link => $prod_data ) {
-				$product_data[ $prod_link ] = $prod_data;
+
+				$data = array(
+					'link' => $prod_link,
+				);
+
+				foreach ( $prod_data as $item_key => $item_val ) {
+					if ( is_array( $item_val ) ) {
+						$item_val = json_encode( $item_val );
+					}
+
+					$data[ $item_key ] = $item_val;
+				}
+
+				$wpdb->insert( $table_name, $data );
 			}
 		}
+	}
 
-		file_put_contents( $file_name, json_encode( $product_data ) );
+	/**
+	 * @param $data
+	 * @param $link
+	 *
+	 * @return void
+	 * Обновляет данные товара после посещение страницы товара
+	 */
+	function updateProductData( $data, $link ) {
+		global $wpdb;
+
+		$table_name = $this->table_name;
+
+		$status = isset( $data['status'] ) ? $data['status'] : null;
+		$image  = isset( $data['mage'] ) ? $data['mage'] : null;
+		$sku    = isset( $data['sku'] ) ? $data['sku'] : null;
+		$desk   = isset( $data['desk'] ) ? $data['desk'] : null;
+		$price  = isset( $data['price'] ) ? $data['price'] : null;
+		$name   = isset( $data['name'] ) ? $data['name'] : null;
+		$attrs  = isset( $data['attrs'] ) ? json_encode( $data['attrs'] ) : null;
+
+		$query = $wpdb->prepare(
+			"UPDATE $table_name SET 
+		    status = %s,
+		    image = %s,
+		    sku = %s,
+		    desk = %s,
+		    price = %s,
+		    name = %s,
+		    attrs = %s
+		    WHERE link = %s",
+			$status,
+			$image,
+			$sku,
+			$desk,
+			$price,
+			$name,
+			$attrs,
+			$link
+		);
+
+		$wpdb->query( $query );
 	}
 
 
@@ -124,25 +182,18 @@ class Parser {
 	 */
 	public function parseProductData() {
 		$this->log( array( 'ProdData' => 'START' ) );
-		$product = $this->getProductFromJson();
+		$product = $this->getProductFromDB( 'add-link' );
 
 		if ( ! $product ) {
 			exit();
 		}
 
-		foreach ( $product as $prod_link => $prod_data ) {
-			if ( $this->handling_pr->getProductStatus( $prod_link ) !== 'add-link' ) {
-				continue;
-			}
+		foreach ( $product as $prod_item ) {
+			$link = $prod_item['link'];
 
-			$product_data = $this->get_product_data( $prod_link );
-			$new_data     = $prod_data;
+			$product_data = $this->get_product_data( $link );
 
-			foreach ( $product_data as $data_key => $data_val ) {
-				$new_data[ $data_key ] = $data_val;
-			}
-
-			$this->addProdDataToJson( array( $prod_link => $new_data ) );
+			$this->updateProductData( $product_data, $link );
 		}
 		$this->log( array( 'ProdData' => 'END' ) );
 	}
@@ -316,7 +367,7 @@ class Parser {
 				$linkHref = str_replace( ' ', '%20', $linkHref );
 				$linkHref = $this->domain . $linkHref;
 
-				if ( ! $this->handling_pr->checkProductInData( $linkHref ) ) {
+				if ( ! $this->checkProductInDB( $linkHref ) ) {
 					$this->prod_buff[ $linkHref ] = array(
 						'main_cat' => $main_cat_name,
 						'nes_cat'  => $nes_cat_name,
@@ -324,14 +375,41 @@ class Parser {
 					);
 				}
 			}
+//			УБРАТЬ
+			break;
 
 			$page_num ++;
 		}
 
 		$this->log( array( "NES CAT $nes_cat_name" => "END" ) );
 
-		$this->addProdDataToJson( $this->prod_buff );
+		$this->addProdDataToDB( $this->prod_buff );
 		$this->prod_buff = array();
+	}
+
+
+	/**
+	 * @param $link
+	 *
+	 * @return bool
+	 * Проверяет есть ли таблица в базе данных
+	 */
+	public function checkProductInDB( $link ) {
+		global $wpdb;
+
+		$table_name = $this->table_name;
+		$query      = $wpdb->prepare(
+			"SELECT COUNT(*) FROM $table_name WHERE link = %s",
+			$link
+		);
+
+		$result = $wpdb->get_var( $query );
+
+		if ( $result > 0 ) {
+			return true;
+		}
+
+		return false;
 	}
 
 
@@ -358,6 +436,12 @@ class Parser {
 		return false;
 	}
 
+	/**
+	 * @param $data
+	 *
+	 * @return void
+	 * Метод лога
+	 */
 	private function log( $data ) {
 		$file_path = get_template_directory() . '/parser/log.json';
 		file_put_contents( $file_path, json_encode( $data, JSON_UNESCAPED_UNICODE ) . PHP_EOL, FILE_APPEND );
@@ -365,7 +449,8 @@ class Parser {
 
 	/**
 	 * @return void
-	 * Вызывает методы парсинга
+	 * Вызывает методы парсинга, 2 части парсинга, первая собирает ссылки, вторая проходит по ссылкам и забирает данные
+	 *
 	 */
 	public function parse() {
 		$this->get_category_links();
