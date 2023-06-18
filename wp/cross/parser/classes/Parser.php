@@ -1,12 +1,9 @@
 <?php
 
-//возможно повесить на метод реквест получени данных с каунтером, через таймаут.
-//То есть делать 100 запросов скажем в минуту
 
 //<!--НЕ НЕЗАБЫТЬ-->
 //<!---->
 //<!--ОТКЛЮЧИТЬ СДЕРЖИВАНИЕ ПАГИНАЦИИ-->
-//<!--ВКЛЮЧИТЬ ПРОВЕРКА В МЕТОДЕ product_fill_cycle()-->
 //<!--Убедиться что все сдерживающие факторы сняты -->
 
 
@@ -61,7 +58,7 @@ class Parser {
 
 		$this->request = new Requests( true );
 
-		$this->prod_file   = get_template_directory() . '/parser/' . 'products1.json';
+		$this->prod_file   = get_template_directory() . '/parser/' . 'products.json';
 		$this->handling_pr = new HandlingStatusParsedData( $this->prod_file );
 
 		if ( $urls ) {
@@ -126,6 +123,7 @@ class Parser {
 	 * Проходит по собранным ссылкам товара и парсин данные товара (цена, название и тд)
 	 */
 	public function parseProductData() {
+		$this->log( array( 'ProdData' => 'START' ) );
 		$product = $this->getProductFromJson();
 
 		if ( ! $product ) {
@@ -146,6 +144,7 @@ class Parser {
 
 			$this->addProdDataToJson( array( $prod_link => $new_data ) );
 		}
+		$this->log( array( 'ProdData' => 'END' ) );
 	}
 
 
@@ -248,13 +247,15 @@ class Parser {
 			}
 
 			$cat_name = $this->getCatName( $page_html );
-			$this->log( "Start MAIN category $cat_name" );
+
+			$this->log( array( "MAIN CAT $cat_name" => "START" ) );
 
 			$query          = "//a[contains(@class, '" . $linkClass . "')]";
 			$category_links = self::query_get_elems_from_html( $page_html, $query );
 
 
 			if ( $category_links->length === 0 ) {
+				$this->log( array( "MAIN CAT $cat_name" => "END continue" ) );
 				continue;
 			}
 
@@ -263,7 +264,7 @@ class Parser {
 				$this->get_and_save_pr_link( $nes_cat_link, $cat_name );
 			}
 
-			$this->log( "End MAIN category $cat_name" );
+			$this->log( array( "MAIN CAT $cat_name" => "END" ) );
 		}
 	}
 
@@ -295,13 +296,14 @@ class Parser {
 		$page_html    = $this->request->request( $cat_link, true );
 		$nes_cat_name = $this->getCatName( $page_html );
 
-		$this->log( "Start NES category $nes_cat_name" );
+		$this->log( array( "NES CAT $nes_cat_name" => "START" ) );
 
 		$page_num = 1;
 		while ( true ) {
 			$page = $this->get_paginate_link_html( $page_num, $cat_link );
 
 			if ( ! $page ) {
+				$this->log( array( "NES CAT $nes_cat_name" => "no paginate" ) );
 				break;
 			}
 
@@ -323,13 +325,10 @@ class Parser {
 				}
 			}
 
-//					Искуственное сдерживание
-			break;
-
 			$page_num ++;
 		}
 
-		$this->log( "End NES category $nes_cat_name" );
+		$this->log( array( "NES CAT $nes_cat_name" => "END" ) );
 
 		$this->addProdDataToJson( $this->prod_buff );
 		$this->prod_buff = array();
