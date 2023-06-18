@@ -10,7 +10,6 @@
 namespace classes;
 
 require_once get_template_directory() . '/parser/classes/Requests.php';
-require_once get_template_directory() . '/parser/classes/HandlingStatusParsedData.php';
 
 use classes\Requests;
 use DOMDocument;
@@ -144,13 +143,13 @@ class Parser {
 
 		$table_name = $this->table_name;
 
-		$status = isset( $data['status'] ) ? $data['status'] : null;
-		$image  = isset( $data['mage'] ) ? $data['mage'] : null;
-		$sku    = isset( $data['sku'] ) ? $data['sku'] : null;
-		$desk   = isset( $data['desk'] ) ? $data['desk'] : null;
-		$price  = isset( $data['price'] ) ? $data['price'] : null;
-		$name   = isset( $data['name'] ) ? $data['name'] : null;
-		$attrs = isset( $data['attrs'] ) ? json_encode( $data['attrs'] ) : 'null';
+		$status = isset( $data['status'] ) ? $data['status'] : 'NULL';
+		$image  = isset( $data['mage'] ) ? $data['mage'] : 'NULL';
+		$sku    = isset( $data['sku'] ) ? $data['sku'] : 'NULL';
+		$desk   = isset( $data['desk'] ) ? $data['desk'] : 'NULL';
+		$price  = isset( $data['price'] ) ? $data['price'] : 'NULL';
+		$name   = isset( $data['name'] ) ? $data['name'] : 'NULL';
+		$attrs  = isset( $data['attrs'] ) ? json_encode( $data['attrs'] ) : 'NULL';
 
 		$query = $wpdb->prepare(
 			"UPDATE $table_name SET 
@@ -181,7 +180,6 @@ class Parser {
 	 * Проходит по собранным ссылкам товара и парсин данные товара (цена, название и тд)
 	 */
 	public function parseProductData() {
-		$this->log( array( 'ProdData' => 'START' ) );
 		$product = $this->getProductFromDB( 'add-link' );
 
 		if ( ! $product ) {
@@ -195,7 +193,6 @@ class Parser {
 
 			$this->updateProductData( $product_data, $link );
 		}
-		$this->log( array( 'ProdData' => 'END' ) );
 	}
 
 
@@ -351,15 +348,17 @@ class Parser {
 
 		$page_num = 1;
 		while ( true ) {
+
 			$page = $this->get_paginate_link_html( $page_num, $cat_link );
 
-			if ( ! $page ) {
-				$this->log( array( "NES CAT $nes_cat_name" => "no paginate" ) );
-				break;
-			}
 
 			$query         = "//a[contains(@class, 'Product__Link--Slider')]";
 			$product_links = $this->query_get_elems_from_html( $page, $query );
+
+			if ( $product_links->length === 0 ) {
+				$this->log( array( "NES CAT $nes_cat_name" => "no paginate" ) );
+				break;
+			}
 
 			foreach ( $product_links as $link ) {
 //				запись в буффер
@@ -375,9 +374,6 @@ class Parser {
 					);
 				}
 			}
-//			УБРАТЬ
-			break;
-
 			$page_num ++;
 		}
 

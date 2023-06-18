@@ -2,7 +2,6 @@
 
 namespace classes;
 
-//require_once get_template_directory() . '/parser/Parser.php';
 require_once get_template_directory() . '/parser/classes/Requests.php';
 require_once get_template_directory() . '/parser/classes/Parser.php';
 
